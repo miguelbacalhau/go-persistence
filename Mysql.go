@@ -3,7 +3,6 @@ package persistence
 import (
 	"bytes"
 	"database/sql"
-	// "fmt"
 	_ "github.com/go-sql-driver/mysql"
 	"strconv"
 )
@@ -31,51 +30,61 @@ func (mysql *Mysql) Open() *sql.DB {
 	return db
 }
 
-func (mysql *Mysql) CreateTable(table *Table) {
-	var buffer bytes.Buffer
-
-	buffer.WriteString("create table ")
-	buffer.WriteString(table.name)
-	buffer.WriteString("(")
-
-	length := len(table.rows) - 1
-	for index, row := range table.rows {
-		buffer.WriteString(row.String())
-		if index < length {
-			buffer.WriteString(", ")
-		}
-	}
-	buffer.WriteString(")")
-
+func (mysql *Mysql) Exec(query string, values ...interface{}) sql.Result {
 	db := mysql.Open()
-	stmt, _ := db.Prepare(buffer.String())
-	stmt.Exec()
+	defer db.Close()
 
+	stmt, err := db.Prepare(query)
+	if err != nil {
+		panic(err)
+	}
+	defer stmt.Close()
+
+	result, errr := stmt.Exec(values...)
+	if errr != nil {
+		panic(errr)
+	}
+
+	return result
 }
 
-func (mysql *Mysql) Insert(table string, values map[string]interface{}) bool {
+func (mysql *Mysql) Query(query string, values ...interface{}) *sql.Rows {
+	db := mysql.Open()
+	defer db.Close()
+
+	stmt, err := db.Prepare(query)
+	if err != nil {
+		panic(err)
+	}
+	defer stmt.Close()
+
+	result, err := stmt.Query(values...)
+	if err != nil {
+		panic(err)
+	}
+
+	return result
+}
+
+func Insert(table *Table) string {
 
 	var buffer bytes.Buffer
 
 	buffer.WriteString("insert ")
-	buffer.WriteString(table)
+	buffer.WriteString(table.name)
 	buffer.WriteString(" set ")
 
-	index := 0
-	execValues := make([]interface{}, len(values))
-	for key, value := range values {
-		buffer.WriteString(key)
-		buffer.WriteString("=? ")
-		execValues[index] = value
-		index++
+	rows := table.rows
+	length := len(rows) - 1
+	for index, row := range rows {
+		buffer.WriteString(row.name)
+		buffer.WriteString("=?")
+		if index < length {
+			buffer.WriteString(", ")
+		}
 	}
 
-	//TODO handle errors
-	db := mysql.Open()
-	stmt, _ := db.Prepare(buffer.String())
-	stmt.Exec(execValues...)
-
-	return true
+	return buffer.String()
 }
 
 func NewMysql(username string, database string) *Mysql {
@@ -141,6 +150,46 @@ func NewRow(name string) *Row {
 		name:       name,
 		properties: make([]string, 0),
 	}
+}
+
+func CreateTable(table *Table) string {
+	var buffer bytes.Buffer
+
+	buffer.WriteString("create table ")
+	buffer.WriteString(table.name)
+	buffer.WriteString("(")
+
+	length := len(table.rows) - 1
+	for index, row := range table.rows {
+		buffer.WriteString(row.String())
+		if index < length {
+			buffer.WriteString(", ")
+		}
+	}
+
+	buffer.WriteString(")")
+
+	return buffer.String()
+}
+
+func SelectAll(table *Table) string {
+	var buffer bytes.Buffer
+
+	buffer.WriteString("select ")
+
+	rows := table.rows
+	length := len(rows) - 1
+	for index, row := range rows {
+		buffer.WriteString(row.name)
+		if index < length {
+			buffer.WriteString(", ")
+		}
+	}
+
+	buffer.WriteString(" from ")
+	buffer.WriteString(table.name)
+
+	return buffer.String()
 }
 
 func Int() string {
