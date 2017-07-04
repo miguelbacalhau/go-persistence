@@ -8,6 +8,8 @@ import (
 	"strconv"
 )
 
+const database = "mysql"
+
 type Mysql struct {
 	username string
 	database string
@@ -21,7 +23,10 @@ func (mysql *Mysql) Open() *sql.DB {
 	buffer.WriteString(":@/")
 	buffer.WriteString(mysql.database)
 
-	db, _ := sql.Open("mysql", buffer.String())
+	db, err := sql.Open(database, buffer.String())
+	if err != nil {
+		panic(err)
+	}
 
 	return db
 }
