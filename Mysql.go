@@ -12,7 +12,22 @@ import (
 	"strconv"
 )
 
-const database = "mysql"
+// Sql interface
+type Sql interface {
+	GetDriverName() string
+	GetDataSourceName() string
+
+	CreateTable(table *Table) string
+	Insert(table *Table) string
+	SelectAll(table *Table) string
+	SelectWhere(table *Table, rows ...string) string
+
+	Int() string
+	String(length int) string
+	NotNull() string
+	PrimaryKey() string
+	AutoIncrement() string
+}
 
 // Mysql structure stores the database information needed
 // to establish a connection
@@ -22,16 +37,25 @@ type Mysql struct {
 	//TODO host and port => user:password@tcp(127.0.0.1:3306)/hello
 }
 
-// Opens a connections to the database
-// The connection should be manually closed after usage
-func (mysql *Mysql) Open() *sql.DB {
+func (mysql *Mysql) GetDriverName() string {
+	return "mysql"
+}
+
+func (mysql *Mysql) GetDataSourceName() string {
 	var buffer bytes.Buffer
 
 	buffer.WriteString(mysql.username)
 	buffer.WriteString(":@/")
 	buffer.WriteString(mysql.database)
 
-	db, err := sql.Open(database, buffer.String())
+	return buffer.String()
+}
+
+// Opens a connections to the database
+// The connection should be manually closed after usage
+func Open(database Sql) *sql.DB {
+
+	db, err := sql.Open(database.GetDriverName(), database.GetDataSourceName())
 	if err != nil {
 		panic(err)
 	}
@@ -40,8 +64,8 @@ func (mysql *Mysql) Open() *sql.DB {
 }
 
 // Executes a query that does not return a result
-func (mysql *Mysql) Exec(query string, values ...interface{}) sql.Result {
-	db := mysql.Open()
+func Exec(database Sql, query string, values ...interface{}) sql.Result {
+	db := Open(database)
 	defer db.Close()
 
 	stmt, err := db.Prepare(query)
@@ -59,8 +83,9 @@ func (mysql *Mysql) Exec(query string, values ...interface{}) sql.Result {
 }
 
 // Executes a query that returns rows
-func (mysql *Mysql) Query(query string, values ...interface{}) *sql.Rows {
-	db := mysql.Open()
+// The rows should be manually closed after use
+func Query(database Sql, query string, values ...interface{}) *sql.Rows {
+	db := Open(database)
 	defer db.Close()
 
 	stmt, err := db.Prepare(query)
@@ -152,7 +177,7 @@ func NewRow(name string) *Row {
 }
 
 // Builds the create table query string
-func CreateTable(table *Table) string {
+func (mysql *Mysql) CreateTable(table *Table) string {
 	var buffer bytes.Buffer
 
 	buffer.WriteString("create table ")
@@ -173,7 +198,7 @@ func CreateTable(table *Table) string {
 }
 
 // Builds the insert query string
-func Insert(table *Table) string {
+func (mysql *Mysql) Insert(table *Table) string {
 
 	var buffer bytes.Buffer
 
@@ -195,7 +220,7 @@ func Insert(table *Table) string {
 }
 
 // Builds the select all rows from table query
-func SelectAll(table *Table) string {
+func (mysql *Mysql) SelectAll(table *Table) string {
 	var buffer bytes.Buffer
 
 	buffer.WriteString("select ")
@@ -215,13 +240,32 @@ func SelectAll(table *Table) string {
 	return buffer.String()
 }
 
+// Builds the select rows match the given values query
+func (mysql *Mysql) SelectWhere(table *Table, rows ...string) string {
+	var buffer bytes.Buffer
+
+	buffer.WriteString(mysql.SelectAll(table))
+	buffer.WriteString(" where ")
+
+	length := len(rows) - 1
+	for index, row := range rows {
+		buffer.WriteString(row)
+		buffer.WriteString("=?")
+		if index < length {
+			buffer.WriteString(" and ")
+		}
+	}
+
+	return buffer.String()
+}
+
 // Builds the Integer sql type
-func Int() string {
+func (mysql *Mysql) Int() string {
 	return "int"
 }
 
 // Builds the String sql type
-func String(length int) string {
+func (mysql *Mysql) String(length int) string {
 	var buffer bytes.Buffer
 
 	buffer.WriteString("varchar(")
@@ -232,16 +276,16 @@ func String(length int) string {
 }
 
 // Builds the Not Null property
-func NotNull() string {
+func (mysql *Mysql) NotNull() string {
 	return "not null"
 }
 
 // Builds the Primary Key property
-func PrimaryKey() string {
+func (mysql *Mysql) PrimaryKey() string {
 	return "primary key"
 }
 
 // Builds the Auto Increment property
-func AutoIncrement() string {
+func (mysql *Mysql) AutoIncrement() string {
 	return "auto_increment"
 }
